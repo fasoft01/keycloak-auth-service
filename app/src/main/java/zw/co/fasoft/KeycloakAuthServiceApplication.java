@@ -1,4 +1,4 @@
-package zw.co.fasoft.keycloakauthservice;
+package zw.co.fasoft;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
