@@ -12,12 +12,11 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import zw.co.fasoft.exceptions.AccountNotFullySetupException;
-import zw.co.fasoft.exceptions.FailedToProcessRequestException;
-import zw.co.fasoft.exceptions.IncorrectUsernameOrPasswordException;
-import zw.co.fasoft.exceptions.RecordNotFoundException;
+import zw.co.fasoft.exceptions.*;
 
 import java.util.*;
+
+import static zw.co.fasoft.Unique_Credentials_Generation.generateRandomPassword;
 
 /**
  * @author Fasoft
@@ -29,7 +28,7 @@ import java.util.*;
 public class AuthenticationServiceImpl implements AuthenticationService {
 
     private final RestTemplate restTemplate;
-//    private final NotificationServiceImpl notificationService;
+    private final NotificationService notificationService;
 //    private final CommonsService commonsService;
 
     LoginResponse loginResponse;
@@ -59,6 +58,61 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private String realmBaseUrl;
 
     @Override
+    public UserAccountRequest createUser(UserAccountRequest request) {
+         buildAndPostUserAccount(request);
+         String content = Message.USER_ACCOUNT_CREATION_MESSAGE
+                 .replace("{username}", request.getEmail())
+                 .replace("{password}", password)
+                 .replace("{role}", request.getRole().name())
+                 .replace("{login-message}",Message.ADMIN_LOGIN_LINK_MESSAGE.
+                         replace("{epay-admin-login-link}","")
+            );
+         String subject = "User Account Creation";
+         Boolean isSms = false;
+         Boolean isEmail = true;
+         Boolean isPush = false;
+
+         notificationService.sendNotification(content,subject,request.getFullName(),request,isEmail,isSms,isPush);
+         return request;
+    }
+    private UserAccountRequest buildAndPostUserAccount(UserAccountRequest userAccountRequest) {
+        String token;
+        password = generateRandomPassword(7);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        assert loginResponse != null;
+        token = loginResponse.getAccess_token();
+
+        headers.setBearerAuth(token);
+        String username = userAccountRequest.getEmail();
+        String requestBody = "{\n" +
+                "    \"username\":\"" + username + "\",\n" +
+                "    \"email\":\"" + userAccountRequest.getEmail() + "\",\n" +
+                "    \"lastName\":\"" + "" + "\",\n" +
+                "    \"firstName\":\"" + userAccountRequest.getFullName() + "\",\n" +
+                "    \"enabled\":\"true\",\n" +
+                "    \"credentials\":[{\"value\":\"" + password + "\",\"type\":\"password\",\"temporary\":true}]\n" +
+                "}";
+
+        HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
+        log.info("request : {}", requestEntity);
+        try {
+            ResponseEntity<String> responses = restTemplate.postForEntity(clientUserUrl, requestEntity, String.class);
+
+            userId = responses.getHeaders().getLocation().getPath().replaceAll(".*/([^/]+)$", "$1");
+        } catch (HttpClientErrorException.Conflict e) {
+            throw new EmailAlreadyExistsException("Email already exists");
+        } catch (HttpClientErrorException.BadRequest e) {
+            throw new FailedToProcessRequestException("Please provide a valid email or input");
+        } catch (HttpClientErrorException httpClientErrorException) {
+            throw new IncorrectUsernameOrPasswordException("Error occured");
+        } catch (Exception e) {
+            throw new FailedToProcessRequestException("unable to process request");
+        }
+        return userAccountRequest;
+    }
+
+        @Override
     public LoginResponse login(LoginRequest request) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -113,7 +167,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         try {
 
             ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.PUT, requestEntity, Void.class);
-//            sendForgotPasswordNotification(userName);
+            sendForgotPasswordNotification(userName);
         } catch (HttpClientErrorException httpClientErrorException) {
             throw new FailedToProcessRequestException("Error resetting password");
         } catch (Exception e) {
@@ -148,7 +202,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         try {
 
             ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.PUT, requestEntity, Void.class);
-//            sendForgotPasswordNotification(userName);
+            sendForgotPasswordNotification(userName);
         } catch (HttpClientErrorException httpClientErrorException) {
             throw new IncorrectUsernameOrPasswordException("Error resetting password");
         } catch (Exception e) {
@@ -156,16 +210,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
     }
-//@Async
-//    public void sendForgotPasswordNotification(String userName) {
-//        // sending notification
-//        String content = Message.PASSWORD_RESET_NOTIFICATION;
-//        String subject = "ACCOUNT PASSWORD RESET";
-//
-//            notificationService.sendNotification(content, subject, userName, userAccount.get(), isEmail, isSms, isPush);
-//        }
-//        notificationService.sendNotification(content, subject, recepientName, userAccount.get(), true, true, false);
-//    }
+@Async
+    public void sendForgotPasswordNotification(String userName) {
+        // sending notification
+        String content = Message.PASSWORD_RESET_NOTIFICATION;
+        String subject = "ACCOUNT PASSWORD RESET";
+
+        notificationService.sendNotification(content, subject, userName, null, true, true, false);
+    }
 
     public String findUserIdByUsername(String username) {
         getAdminToken();

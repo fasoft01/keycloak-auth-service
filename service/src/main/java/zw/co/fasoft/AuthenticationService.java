@@ -3,6 +3,7 @@ package zw.co.fasoft;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 public interface AuthenticationService {
+    UserAccountRequest createUser(UserAccountRequest request);
    LoginResponse login(LoginRequest request);
 
     void resetPassword(PasswordResetRequest request, String username);

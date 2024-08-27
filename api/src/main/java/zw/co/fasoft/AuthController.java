@@ -32,6 +32,12 @@ public class AuthController {
     ) {
         return ResponseEntity.ok(authService.login(loginRequest));
     }
+
+    @PostMapping()
+    @Operation(description = "Create A user")
+    public ResponseEntity<UserAccountRequest> createUser(@RequestBody UserAccountRequest userAccountRequest){
+        return ResponseEntity.ok(authService.createUser(userAccountRequest));
+    }
     @PostMapping("/forgot-password")
     @Operation(description = "forgot password ")
     public ResponseEntity<Responses> forgotPassword(@RequestParam String username) {
