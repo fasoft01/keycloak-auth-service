@@ -60,22 +60,12 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Override
     public UserAccountRequest createUser(UserAccountRequest request) {
          buildAndPostUserAccount(request);
-         String content = Message.USER_ACCOUNT_CREATION_MESSAGE
-                 .replace("{username}", request.getEmail())
-                 .replace("{password}", password)
-                 .replace("{role}", request.getRole().name())
-                 .replace("{login-message}",Message.ADMIN_LOGIN_LINK_MESSAGE.
-                         replace("{epay-admin-login-link}","")
-            );
-         String subject = "User Account Creation";
-         Boolean isSms = false;
-         Boolean isEmail = true;
-         Boolean isPush = false;
 
-         notificationService.sendNotification(content,subject,request.getFullName(),request,isEmail,isSms,isPush);
+//         notificationService.sendNotification(content,subject,request.getFullName(),request,isEmail,isSms,isPush);
          return request;
     }
     private UserAccountRequest buildAndPostUserAccount(UserAccountRequest userAccountRequest) {
+        getAdminToken();
         String token;
         password = generateRandomPassword(7);
         HttpHeaders headers = new HttpHeaders();
@@ -289,6 +279,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
 
     public void sendForgotPassword(String username) {
+        getAdminToken();
         String token;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
