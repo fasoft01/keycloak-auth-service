@@ -44,9 +44,9 @@ public class ExceptionHandlerController {
     @ExceptionHandler(AccountNotFullySetupException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public @ResponseBody
-    Error accountNotFullySetupError(FileAlreadyExistsException e) {
+    Error accountNotFullySetupError(AccountNotFullySetupException e) {
         LOGGER.info("Account not fully setup: {}", e.getMessage());
-        return Error.of(408, e.getMessage());
+        return Error.of(407, e.getMessage());
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
