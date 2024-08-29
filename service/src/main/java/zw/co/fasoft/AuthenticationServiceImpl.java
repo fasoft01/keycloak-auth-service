@@ -95,7 +95,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         } catch (HttpClientErrorException.BadRequest e) {
             throw new FailedToProcessRequestException("Please provide a valid email or input");
         } catch (HttpClientErrorException httpClientErrorException) {
-            throw new IncorrectUsernameOrPasswordException("Error occured");
+            throw new IncorrectUsernameOrPasswordException("Error occured "+httpClientErrorException.getResponseBodyAsString());
         } catch (Exception e) {
             throw new FailedToProcessRequestException("unable to process request");
         }
@@ -324,8 +324,9 @@ log.info("link : {}", link);
 //        log.info("request : {}", httpEntity);
         try {
             loginResponse = restTemplate.postForObject(masterUrl, httpEntity, LoginResponse.class);
+            log.info("response : {}", loginResponse);
         } catch (HttpClientErrorException httpClientErrorException) {
-            throw new IncorrectUsernameOrPasswordException("password or username is incorrect");
+            throw new IncorrectUsernameOrPasswordException("password or username is incorrect "+httpClientErrorException.getMessage());
         } catch (Exception e) {
             throw new FailedToProcessRequestException("unable to process request");
         }
