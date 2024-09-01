@@ -59,12 +59,44 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     public UserAccountRequest createUser(UserAccountRequest request) {
-         buildAndPostUserAccount(request);
+       String password =  buildAndPostUserAccount(request);
 
+        userGroupID = getUserGroupID_ByName(request.getRole().name());
+        assignUserToGroup(userId, userGroupID);
+
+        updatePassword(
+                UpdatePasswordRequest.builder()
+                        .password(password)
+                        .confirmPassword(password)
+                        .build()
+                ,request.getUsername());
 //         notificationService.sendNotification(content,subject,request.getFullName(),request,isEmail,isSms,isPush);
          return request;
     }
-    private UserAccountRequest buildAndPostUserAccount(UserAccountRequest userAccountRequest) {
+
+    private String getUserGroupID_ByName(String groupName) {
+        GroupDetails[] userGroups = getUserGroups();
+        for (GroupDetails group : userGroups) {
+            if (group.getName().equals(groupName)) {
+                return group.getId();
+            }
+        }
+        return null;
+    }
+
+    private GroupDetails[] getUserGroups() {
+        String url = "http://localhost:7080/admin/realms/OnlineResourceHub"+"/groups";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        assert loginResponse != null;
+        headers.setBearerAuth(loginResponse.getAccess_token());
+
+        HttpEntity<String> requestEntity = new HttpEntity<>(headers);
+        ResponseEntity<GroupDetails[]> response = restTemplate.exchange(url,HttpMethod.GET,requestEntity, GroupDetails[].class);
+        return response.getBody();
+    }
+    private String buildAndPostUserAccount(UserAccountRequest userAccountRequest) {
         getAdminToken();
         String token;
         password = generateRandomPassword(7);
@@ -74,7 +106,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         token = loginResponse.getAccess_token();
 
         headers.setBearerAuth(token);
-        String username = userAccountRequest.getEmail();
+        String username = userAccountRequest.getUsername();
         String requestBody = "{\n" +
                 "    \"username\":\"" + username + "\",\n" +
                 "    \"email\":\"" + userAccountRequest.getEmail() + "\",\n" +
@@ -99,42 +131,50 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         } catch (Exception e) {
             throw new FailedToProcessRequestException("unable to process request");
         }
-        return userAccountRequest;
+        return password;
     }
 
         @Override
     public LoginResponse login(LoginRequest request) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        LoginResponse response = null;
-        LinkedMultiValueMap<String, String> map = new LinkedMultiValueMap<>();
-        map.add("grant_type", grantType);
-        map.add("client_id", clientId);
-        map.add("username", request.getUsername());
-        map.add("password", request.getPassword());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            LoginResponse response = null;
+            LinkedMultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+            map.add("grant_type", grantType);
+            map.add("client_id", clientId);
+            map.add("username", request.getUsername());
+            map.add("password", request.getPassword());
 
-        HttpEntity<LinkedMultiValueMap<String, String>> httpEntity = new HttpEntity<>(map, headers);
+            HttpEntity<LinkedMultiValueMap<String, String>> httpEntity = new HttpEntity<>(map, headers);
 //        log.info("request : {}", httpEntity);
-        try {
-            response = restTemplate.postForObject(tokenUrl, httpEntity, LoginResponse.class);
-        }
-        catch (HttpClientErrorException httpClientErrorException) {
             try {
-                ErrorResponse errorResponse = new ObjectMapper()
-                   .readValue(httpClientErrorException.getResponseBodyAsString(), ErrorResponse.class);
-                if(errorResponse.getError_description().contains("Account not fully setup"))
-                  throw new AccountNotFullySetupException(errorResponse.getError_description());
+                response = restTemplate.postForObject(tokenUrl, httpEntity, LoginResponse.class);
+            } catch (HttpClientErrorException httpClientErrorException) {
+                // Check if the response body is empty
+                if (httpClientErrorException.getResponseBodyAsString() == null || httpClientErrorException.getResponseBodyAsString().isEmpty()) {
+                    // Handle cases where the body is empty, such as 401 Unauthorized
+                    if (httpClientErrorException.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                        throw new IncorrectUsernameOrPasswordException("Unauthorized access - Incorrect username or password.");
+                    } else {
+                        throw new FailedToProcessRequestException("HTTP error occurred without a response body.");
+                    }
+                } else {
+                    // Handle cases where the body is not empty
+                    try {
+                        ErrorResponse errorResponse = new ObjectMapper()
+                                .readValue(httpClientErrorException.getResponseBodyAsString(), ErrorResponse.class);
+                        if (errorResponse.getError_description().contains("Account not fully setup")) {
+                            throw new AccountNotFullySetupException(errorResponse.getError_description());
+                        }
 
-                throw new IncorrectUsernameOrPasswordException(errorResponse.getError_description());
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException(e);
+                        throw new AccountNotFullySetupException(errorResponse.getError_description());
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException("Failed to parse error response.", e);
+                    }
+                }
             }
-
-        } catch (Exception e) {
-            throw new FailedToProcessRequestException("unable to process request "+e.getMessage());
+            return response;
         }
-        return response;
-    }
     @Override
     public void updatePassword(UpdatePasswordRequest request, String userName) {
         getAdminToken();
@@ -143,7 +183,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         String userId = findUserIdByUsername(userName);
 
-        String url = realmBaseUrl+"/users/" + userId + "/reset-password";
+        String url = "http://localhost:7080/admin/realms/OnlineResourceHub"+"/users/" + userId + "/reset-password";
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(loginResponse.getAccess_token());
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -157,13 +197,33 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         try {
 
             ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.PUT, requestEntity, Void.class);
-            sendForgotPasswordNotification(userName);
+//            sendForgotPasswordNotification(userName);
         } catch (HttpClientErrorException httpClientErrorException) {
             throw new FailedToProcessRequestException("Error resetting password");
         } catch (Exception e) {
             throw new FailedToProcessRequestException("unable to process request");
         }
 
+    }
+
+    private void assignUserToGroup(String userId, String userGroupID) {
+        String url = "http://localhost:7080/admin/realms/OnlineResourceHub"+"/users/"+userId+"/groups/"+userGroupID;
+        String token;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        assert loginResponse != null;
+        token = loginResponse.getAccess_token();
+
+        headers.setBearerAuth(token);
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        try{
+            restTemplate.exchange(url, HttpMethod.PUT, requestEntity, Void.class);
+            log.info("user assigned to group");
+        }
+        catch (HttpClientErrorException e){
+            log.info("Error assigning user to group"+ e.getStatusCode() + " - " + e.getResponseBodyAsString());
+        }
     }
 
 
@@ -212,7 +272,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     public String findUserIdByUsername(String username) {
         getAdminToken();
 
-        String url = realmBaseUrl+"/users?username=" + username;
+        String url = "http://localhost:7080/admin/realms/OnlineResourceHub"+"/users?username=" + username;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(loginResponse.getAccess_token());

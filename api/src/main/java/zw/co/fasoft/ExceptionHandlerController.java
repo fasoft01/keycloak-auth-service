@@ -6,9 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
-import zw.co.fasoft.exceptions.AccountNotFullySetupException;
+import zw.co.fasoft.exceptions.*;
 import zw.co.fasoft.exceptions.Error;
-import zw.co.fasoft.exceptions.RecordNotFoundException;
 
 import java.nio.file.FileAlreadyExistsException;
 
@@ -25,12 +24,21 @@ public class ExceptionHandlerController {
 
 
 
+
     @ExceptionHandler(RecordNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public @ResponseBody
     Error recordNotFoundError(RecordNotFoundException e) {
         LOGGER.info("Record not found error: {}", e.getMessage());
         return Error.of(404, e.getMessage());
+    }
+
+    @ExceptionHandler(AccountNotFullySetupException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public @ResponseBody
+    Error accountNotFullySetup(AccountNotFullySetupException e) {
+        LOGGER.info("Account not fully setup");
+        return Error.of(422, e.getMessage());
     }
 
     @ExceptionHandler(FileAlreadyExistsException.class)
@@ -41,19 +49,54 @@ public class ExceptionHandlerController {
         return Error.of(409, e.getMessage());
     }
 
-    @ExceptionHandler(AccountNotFullySetupException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public @ResponseBody
-    Error accountNotFullySetupError(AccountNotFullySetupException e) {
-        LOGGER.info("Account not fully setup: {}", e.getMessage());
-        return Error.of(407, e.getMessage());
-    }
-
     @ExceptionHandler(HttpClientErrorException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public @ResponseBody
     Error httpClientErrorException(HttpClientErrorException e) {
         LOGGER.info("Error occured while processing request: Details {}", e.getMessage());
+        return Error.of(400, e.getMessage());
+    }
+
+
+    @ExceptionHandler(DocumentNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public @ResponseBody
+    Error documentNotFoundException(DocumentNotFoundException e) {
+        LOGGER.info("Document does not exist error: {}", e.getMessage());
+        return Error.of(404, e.getMessage());
+    }
+
+
+    @ExceptionHandler(IncorrectUsernameOrPasswordException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public @ResponseBody
+    Error incorrectUsernameOrPassword(IncorrectUsernameOrPasswordException e) {
+        LOGGER.info("Incorrect Username or Password : {}", e.getMessage());
+        return Error.of(401, e.getMessage());
+    }
+
+    @ExceptionHandler(FailedToProcessRequestException.class)
+    @ResponseStatus(HttpStatus.REQUEST_TIMEOUT)
+    public @ResponseBody
+    Error failedToProcessRequest(FailedToProcessRequestException e) {
+        LOGGER.info("Failed to process Request :{}", e.getMessage());
+        return Error.of(408, e.getMessage());
+    }
+
+
+    @ExceptionHandler(EmailAlreadyExistsException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public @ResponseBody
+    Error emailAlreadyExistsException(EmailAlreadyExistsException e) {
+        LOGGER.info("Email Already exists:{}", e.getMessage());
+        return Error.of(409, e.getMessage());
+    }
+
+    @ExceptionHandler(IncorrectFormatException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public @ResponseBody
+    Error incorrectFormatException(IncorrectFormatException e) {
+        LOGGER.info("Incorrect Format:{}", e.getMessage());
         return Error.of(400, e.getMessage());
     }
 }

@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 public class UserAccountRequest {
     private String fullName;
     private String email;
+    private String username;
     private String phoneNumber;
     @Enumerated(EnumType.STRING)
     private UserGroup role;
